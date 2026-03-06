@@ -1,13 +1,24 @@
 import mongoose from "mongoose";
 import { config } from "./config";
 
-export async function connectDatabase() {
-    try {
-        await mongoose.connect(config.mongoUri);
-        console.log("Connected to MongoDB");
-    } catch (error) {
-        console.error("Failed to connect to MongoDB:", error);
-        process.exit(1);
+export async function connectDatabase(retries = 5) {
+    while (retries > 0) {
+        try {
+            await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 5000 });
+            console.log("Connected to MongoDB via Mongoose");
+            return;
+        } catch (error: any) {
+            console.error(`MongoDB connection failed (Retries left: ${retries - 1}):`, error.message);
+            retries -= 1;
+            if (retries === 0) {
+                console.error("CRITICAL: Exhausted all MongoDB connection retries. Please check your IP whitelist and credentials.");
+                // We won't exit the process so the bot can at least keep trying to reconnect later or stay alive,
+                // but we resolve to let index.ts continue.
+                return;
+            }
+            // Wait 5 seconds before retrying
+            await new Promise(res => setTimeout(res, 5000));
+        }
     }
 }
 

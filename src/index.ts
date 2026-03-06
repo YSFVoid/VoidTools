@@ -8,7 +8,8 @@ import { handleSecurityScan } from "./modules/security";
 import { handlePrefixCommand } from "./modules/memberCommands";
 import { setupCommand, executeSetup, handleSetupWizardBtn, handleSetupWizardSubmit } from "./modules/setup";
 import { handleVerifyBtn, handleMemberJoin } from "./modules/verification";
-import { handleTicketOpen, handleTicketCloseBtn, handleTicketCloseSubmit, handleTicketTranscriptBtn } from "./modules/tickets";
+import { handleTicketOpen, handleTicketCloseBtn, handleTicketCloseSubmit, handleTicketTranscriptBtn, handleTicketAddUserBtn, handleTicketAddUserSubmit } from "./modules/tickets";
+import { toolsCommands, handleToolsAdmin } from "./modules/toolsHub";
 import { startYouTubePoller } from "./modules/youtube";
 import { modCommands, handleBan, handleKick, handlePurge } from "./modules/moderation";
 
@@ -38,7 +39,7 @@ client.once("ready", async () => {
     // Sync slash commands
     const rest = new REST({ version: "10" }).setToken(config.token);
     try {
-        const commands = [setupCommand.toJSON(), ...modCommands.map(c => c.toJSON())];
+        const commands = [setupCommand.toJSON(), ...modCommands.map(c => c.toJSON()), ...toolsCommands.map(c => c.toJSON())];
         await rest.put(Routes.applicationCommands(client.user!.id), { body: commands });
         console.log("Slash commands synced globally.");
     } catch (error) {
@@ -66,6 +67,7 @@ client.on("interactionCreate", async (interaction) => {
             if (interaction.commandName === "ban") await handleBan(interaction);
             if (interaction.commandName === "kick") await handleKick(interaction);
             if (interaction.commandName === "purge") await handlePurge(interaction);
+            if (["addtool", "removetool", "edittool"].includes(interaction.commandName)) await handleToolsAdmin(interaction);
         }
 
         // 2. Buttons
@@ -75,6 +77,7 @@ client.on("interactionCreate", async (interaction) => {
             if (interaction.customId === "ticket_btn_open") await handleTicketOpen(interaction);
             if (interaction.customId === "ticket_close") await handleTicketCloseBtn(interaction);
             if (interaction.customId === "ticket_transcript") await handleTicketTranscriptBtn(interaction);
+            if (interaction.customId === "ticket_add_user") await handleTicketAddUserBtn(interaction);
         }
 
         // 3. Select Menus
@@ -86,6 +89,7 @@ client.on("interactionCreate", async (interaction) => {
         if (interaction.isModalSubmit()) {
             if (interaction.customId === "setup_wizard_modal") await handleSetupWizardSubmit(interaction);
             if (interaction.customId === "ticket_close_modal") await handleTicketCloseSubmit(interaction);
+            if (interaction.customId === "ticket_add_user_modal") await handleTicketAddUserSubmit(interaction);
         }
 
     } catch (error) {

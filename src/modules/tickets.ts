@@ -206,3 +206,45 @@ export async function handleTicketTranscriptBtn(interaction: ButtonInteraction) 
         await interaction.editReply({ content: "Failed to generate transcript." });
     }
 }
+
+export async function handleTicketAddUserBtn(interaction: ButtonInteraction) {
+    if (!await isStaff(interaction.member as any)) {
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], ephemeral: true });
+    }
+
+    const modal = new ModalBuilder()
+        .setCustomId("ticket_add_user_modal")
+        .setTitle("Add User to Ticket");
+
+    const idInput = new TextInputBuilder()
+        .setCustomId("userId")
+        .setLabel("User ID")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+    modal.addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(idInput));
+    await interaction.showModal(modal);
+}
+
+export async function handleTicketAddUserSubmit(interaction: ModalSubmitInteraction) {
+    await interaction.deferReply({ ephemeral: true });
+    const userId = interaction.fields.getTextInputValue("userId");
+    const channel = interaction.channel as TextChannel;
+
+    try {
+        const member = await interaction.guild?.members.fetch(userId);
+        if (!member) return interaction.editReply({ embeds: [errorEmbed("Not Found", "User not found in server.")] });
+
+        await channel.permissionOverwrites.edit(userId, {
+            ViewChannel: true,
+            SendMessages: true,
+            AttachFiles: true,
+            ReadMessageHistory: true
+        });
+
+        await interaction.editReply({ embeds: [successEmbed("Added", `Added <@${userId}> to the ticket.`)] });
+        await channel.send(`<@${userId}> was added to the ticket by ${interaction.user}.`);
+    } catch (e) {
+        await interaction.editReply({ embeds: [errorEmbed("Error", "Invalid User ID or missing permissions.")] });
+    }
+}

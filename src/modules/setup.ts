@@ -109,28 +109,28 @@ export async function executeSetup(interaction: ChatInputCommandInteraction) {
     // 2. PERMISSION SETS (Strict Lockdown)
     const staffOverwrites: OverwriteResolvable[] = [
         { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-        { id: rAdmin.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-        { id: rMod.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
-        { id: rSupport.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+        { id: rAdmin.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+        { id: rMod.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+        { id: rSupport.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
     ];
 
     const publicExceptVerifyOverwrites: OverwriteResolvable[] = [
         { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] }, // @everyone denies view
-        { id: rVerified.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] }, // Verified can see
-        { id: rAdmin.id, allow: [PermissionFlagsBits.ViewChannel] },
-        { id: rMod.id, allow: [PermissionFlagsBits.ViewChannel] },
+        { id: rVerified.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] }, // Verified can see
+        { id: rAdmin.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] },
+        { id: rMod.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] },
     ];
 
     const verifyChannelOverwrites: OverwriteResolvable[] = [
-        { id: guild.id, allow: [PermissionFlagsBits.ViewChannel], deny: [PermissionFlagsBits.SendMessages] }, // everyone sees #verify
+        { id: guild.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory], deny: [PermissionFlagsBits.SendMessages] }, // everyone sees #verify
         { id: rVerified.id, deny: [PermissionFlagsBits.ViewChannel] }, // Verified CANNOT see #verify (disappears)
-        { id: rAdmin.id, allow: [PermissionFlagsBits.ViewChannel] },
+        { id: rAdmin.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory] },
     ];
 
     const sellingToolsOverwrites: OverwriteResolvable[] = [
         { id: guild.id, deny: [PermissionFlagsBits.ViewChannel] },
-        { id: rVerified.id, allow: [PermissionFlagsBits.ViewChannel], deny: [PermissionFlagsBits.SendMessages] },
-        { id: rAdmin.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages] },
+        { id: rVerified.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory], deny: [PermissionFlagsBits.SendMessages] },
+        { id: rAdmin.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
     ];
 
     // 3. SELLING CATEGORY & CHANNELS
