@@ -11,6 +11,7 @@ import { handleVerifyBtn, handleMemberJoin } from "./modules/verification";
 import { handleTicketOpen, handleTicketCloseBtn, handleTicketCloseSubmit, handleTicketTranscriptBtn, handleTicketAddUserBtn, handleTicketAddUserSubmit } from "./modules/tickets";
 import { toolsCommands, handleToolsAdmin } from "./modules/toolsHub";
 import { startYouTubePoller } from "./modules/youtube";
+import { releasesCommands, handleReleasesAdmin, startReleasesPoller } from "./modules/releases";
 import { modCommands, handleBan, handleKick, handlePurge } from "./modules/moderation";
 
 export const client = new Client({
@@ -35,11 +36,12 @@ client.once("ready", async () => {
 
     // Start polling
     startYouTubePoller(client);
+    startReleasesPoller(client);
 
     // Sync slash commands
     const rest = new REST({ version: "10" }).setToken(config.token);
     try {
-        const commands = [setupCommand.toJSON(), ...modCommands.map(c => c.toJSON()), ...toolsCommands.map(c => c.toJSON())];
+        const commands = [setupCommand.toJSON(), ...modCommands.map(c => c.toJSON()), ...toolsCommands.map(c => c.toJSON()), ...releasesCommands.map(c => c.toJSON())];
         await rest.put(Routes.applicationCommands(client.user!.id), { body: commands });
         console.log("Slash commands synced globally.");
     } catch (error) {
@@ -68,6 +70,7 @@ client.on("interactionCreate", async (interaction) => {
             if (interaction.commandName === "kick") await handleKick(interaction);
             if (interaction.commandName === "purge") await handlePurge(interaction);
             if (["addtool", "removetool", "edittool"].includes(interaction.commandName)) await handleToolsAdmin(interaction);
+            if (interaction.commandName === "releases") await handleReleasesAdmin(interaction);
         }
 
         // 2. Buttons

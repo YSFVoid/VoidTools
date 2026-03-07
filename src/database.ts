@@ -116,3 +116,13 @@ const warningSchema = new mongoose.Schema({
 });
 
 export const Warning = mongoose.model("Warning", warningSchema);
+
+const releaseFeedSchema = new mongoose.Schema({
+    guildId: { type: String, required: true },
+    url: { type: String, required: true },
+    addedBy: String,
+    lastReleaseId: String,
+    lastReleasePublishedAt: Date,
+});
+
+export const ReleaseFeed = mongoose.model("ReleaseFeed", releaseFeedSchema);
