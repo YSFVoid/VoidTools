@@ -16,12 +16,12 @@ import {
     TextInputStyle,
 } from "discord.js";
 import { defaultCategories, defaultChannels, defaultRoles } from "../config";
-import { GuildConfig } from "../database";
+import { getGuildConfig, getOrCreateGuildConfig } from "../database";
 import { errorEmbed, infoEmbed, primaryEmbed, successEmbed } from "../utils/embeds";
 import { ensurePanelMessage } from "../utils/panels";
 import { isAdmin } from "../utils/permissions";
 import { sendTicketPanel } from "./tickets";
-import { ensureYouTubeNotificationRole, normalizeYouTubeChannelInput } from "./youtube";
+import { ensureYouTubeNotificationRole, getYouTubeErrorMessage, resolveYouTubeChannelInput } from "./youtube";
 
 function getPanelRef(ref: any) {
     if (!ref?.channelId || !ref?.messageId) {
@@ -183,10 +183,7 @@ export async function executeSetup(interaction: ChatInputCommandInteraction) {
     const catLogs = await ensureCategory(guild, defaultCategories.logs, staffOverwrites);
     const chLogs = await ensureChannel(guild, defaultChannels.logs, "logs", catLogs.id, staffOverwrites);
 
-    let gConf = await GuildConfig.findOne({ guildId: guild.id });
-    if (!gConf) {
-        gConf = new GuildConfig({ guildId: guild.id });
-    }
+    const gConf = await getOrCreateGuildConfig(guild.id);
 
     const youtubeRole = await ensureYouTubeNotificationRole(guild, gConf).catch(() => null);
 
@@ -312,7 +309,7 @@ export async function handleSetupWizardBtn(interaction: any) {
 
     const ytInput = new TextInputBuilder()
         .setCustomId("youtube")
-        .setLabel("YouTube Channel ID or URL (optional)")
+        .setLabel("YouTube ID, RSS URL, or @handle")
         .setStyle(TextInputStyle.Short)
         .setRequired(false);
 
@@ -349,38 +346,44 @@ export async function handleSetupWizardSubmit(interaction: ModalSubmitInteractio
     const youtube = interaction.fields.getTextInputValue("youtube").trim();
     const desc = interaction.fields.getTextInputValue("sellingDesc").trim();
     const contact = interaction.fields.getTextInputValue("sellingContact").trim();
-    const normalizedYouTube = normalizeYouTubeChannelInput(youtube);
-
-    if (normalizedYouTube.error) {
-        return interaction.editReply({ embeds: [errorEmbed("Invalid YouTube Input", normalizedYouTube.error)] });
+    let resolvedYouTube = null;
+    try {
+        resolvedYouTube = youtube ? await resolveYouTubeChannelInput(youtube, `setup:${interaction.guildId}`) : null;
+    } catch (error) {
+        return interaction.editReply({ embeds: [errorEmbed("Invalid YouTube Input", getYouTubeErrorMessage(error))] });
     }
 
-    const gConf = await GuildConfig.findOne({ guildId: interaction.guildId });
+    const guildId = interaction.guildId;
+    const gConf = guildId ? await getGuildConfig(guildId) : null;
     if (!gConf) {
         return interaction.editReply({ embeds: [errorEmbed("Config Not Found", "Run /setup first.")] });
     }
 
     gConf.setupWizard = {
         githubValue: github,
-        youtubeChannelId: normalizedYouTube.value || "",
+        youtubeChannelId: resolvedYouTube?.channelId || "",
         sellingDescription: desc,
         sellingContact: contact,
         notifyChannelId: gConf.channelIds?.toolReleasesId,
     };
 
-    if (normalizedYouTube.value) {
-        gConf.youtube = {
+    if (resolvedYouTube) {
+        const nextYouTubeState: any = {
             ...(gConf.youtube || {}),
-            channelInput: normalizedYouTube.value,
+            originalInput: resolvedYouTube.originalInput,
+            channelId: resolvedYouTube.channelId,
+            feedUrl: resolvedYouTube.feedUrl,
             notifyChannelId: gConf.channelIds?.toolReleasesId || "",
             lastVideoId: gConf.youtube?.lastVideoId,
             lastVideoPublishedAt: gConf.youtube?.lastVideoPublishedAt,
         };
+        delete nextYouTubeState.channelInput;
+        gConf.youtube = nextYouTubeState;
     }
 
     await gConf.save();
 
-    if (normalizedYouTube.value && interaction.guild) {
+    if (resolvedYouTube && interaction.guild) {
         await ensureYouTubeNotificationRole(interaction.guild, gConf).catch(() => null);
     }
 

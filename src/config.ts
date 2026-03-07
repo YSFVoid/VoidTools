@@ -46,6 +46,7 @@ export const config = {
     host: readEnv("HOST") || "0.0.0.0",
     dashboardToken: readEnv("DASHBOARD_TOKEN"),
     githubToken: readEnv("GITHUB_TOKEN"),
+    youtubeApiKey: readEnv("YOUTUBE_API_KEY"),
     dnsServers: configuredDnsServers,
     colors: {
         primary: 0x7b2fbe,

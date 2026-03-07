@@ -16,7 +16,7 @@ import {
     TextInputStyle,
 } from "discord.js";
 import { config } from "../config";
-import { GuildConfig, Ticket } from "../database";
+import { Ticket, getGuildConfig } from "../database";
 import { errorEmbed, infoEmbed, primaryEmbed, successEmbed } from "../utils/embeds";
 import { PanelRef, ensurePanelMessage } from "../utils/panels";
 import { isStaff } from "../utils/permissions";
@@ -111,7 +111,7 @@ export async function handleTicketOpen(interaction: AnySelectMenuInteraction | B
             await existing.save();
         }
 
-        const gConf = await GuildConfig.findOne({ guildId: guild.id });
+        const gConf = await getGuildConfig(guild.id);
         if (!gConf) {
             return interaction.editReply({ embeds: [errorEmbed("Setup Required", "Server config not found.")] });
         }
@@ -238,7 +238,7 @@ export async function handleTicketCloseSubmit(interaction: ModalSubmitInteractio
 
     const transcriptAttr = await generateTranscript(channel, 300);
     let transcriptUrl = "None";
-    const gConf = await GuildConfig.findOne({ guildId: interaction.guildId });
+    const gConf = interaction.guildId ? await getGuildConfig(interaction.guildId) : null;
     if (gConf?.channelIds?.logsId && transcriptAttr) {
         try {
             const logsChannel =

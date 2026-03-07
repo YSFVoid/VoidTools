@@ -1,10 +1,10 @@
 import { ButtonInteraction, EmbedBuilder, GuildMember, TextChannel } from "discord.js";
 import { config } from "../config";
-import { GuildConfig } from "../database";
+import { getGuildConfig } from "../database";
 import { errorEmbed, infoEmbed, successEmbed } from "../utils/embeds";
 
 export async function handleVerifyBtn(interaction: ButtonInteraction) {
-    const gConf = await GuildConfig.findOne({ guildId: interaction.guildId });
+    const gConf = interaction.guildId ? await getGuildConfig(interaction.guildId) : null;
     if (!gConf?.roleIds?.verifiedRoleId) {
         return interaction.reply({ embeds: [errorEmbed("Config Error", "Run `/setup` first.")], ephemeral: true });
     }
@@ -40,7 +40,7 @@ export async function handleVerifyBtn(interaction: ButtonInteraction) {
 
 export async function handleMemberJoin(member: GuildMember) {
     try {
-        const guildConfig = await GuildConfig.findOne({ guildId: member.guild.id });
+        const guildConfig = await getGuildConfig(member.guild.id);
         const verifyLine = guildConfig?.channelIds?.verifyId
             ? `To access the server, head to <#${guildConfig.channelIds.verifyId}> and click the Verify button.\n\n`
             : "To access the server, head to the verify channel and click the Verify button.\n\n";

@@ -284,6 +284,12 @@ async function main() {
         return;
     }
 
+    if (config.youtubeApiKey) {
+        console.log("YouTube Data API key configured.");
+    } else {
+        console.warn("YOUTUBE_API_KEY is not set. @handle YouTube inputs will not resolve until it is configured.");
+    }
+
     const databasePromise = connectDatabase().catch((error) => {
         console.error("Initial database connection task failed:", error);
         return false;

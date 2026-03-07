@@ -10,7 +10,7 @@ import {
     SlashCommandBuilder,
 } from "discord.js";
 import { config } from "../config";
-import { GuildConfig, isDatabaseReady, ReleaseFeed } from "../database";
+import { getGuildConfig, isDatabaseReady, ReleaseFeed } from "../database";
 import { markJobFinished, markJobOffline, markJobStarted } from "../runtime";
 import { errorEmbed, primaryEmbed, successEmbed } from "../utils/embeds";
 import { isStaff } from "../utils/permissions";
@@ -373,7 +373,7 @@ export async function handleGitHubWatchAdmin(interaction: ChatInputCommandIntera
             await interaction.deferReply({ ephemeral: true });
 
             const branch = watch.defaultBranch || parsedRepo.branch || repository.default_branch;
-            const guildConfig = await GuildConfig.findOne({ guildId });
+            const guildConfig = await getGuildConfig(guildId);
             const targetChannelId = watch.targetChannelId || guildConfig?.channelIds?.toolReleasesId;
             if (!targetChannelId) {
                 return interaction.editReply({
@@ -483,7 +483,7 @@ async function runGitHubPoll(client: Client) {
                 const guild = client.guilds.cache.get(hydratedWatch.guildId);
                 if (!guild) continue;
 
-                const guildConfig = await GuildConfig.findOne({ guildId: hydratedWatch.guildId });
+                const guildConfig = await getGuildConfig(hydratedWatch.guildId);
                 const targetChannelId = hydratedWatch.targetChannelId || guildConfig?.channelIds?.toolReleasesId;
                 if (!targetChannelId) continue;
 

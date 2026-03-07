@@ -6,7 +6,7 @@ import {
 } from "discord.js";
 import { successEmbed, errorEmbed, modLogEmbed } from "../utils/embeds";
 import { isStaff } from "../utils/permissions";
-import { GuildConfig } from "../database";
+import { getGuildConfig } from "../database";
 
 export const modCommands = [
     new SlashCommandBuilder()
@@ -31,7 +31,7 @@ export const modCommands = [
 ];
 
 async function logAction(interaction: ChatInputCommandInteraction, action: string, target: User, reason: string) {
-    const gConf = await GuildConfig.findOne({ guildId: interaction.guildId });
+    const gConf = interaction.guildId ? await getGuildConfig(interaction.guildId) : null;
     if (gConf?.channelIds?.logsId) {
         const ch = interaction.guild?.channels.cache.get(gConf.channelIds.logsId) as TextChannel;
         if (ch) await ch.send({ embeds: [modLogEmbed(action, interaction.user, target, reason)] });

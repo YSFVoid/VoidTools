@@ -1,6 +1,6 @@
 import { Message, EmbedBuilder, TextChannel } from "discord.js";
 import { config } from "../config";
-import { GuildConfig, isDatabaseReady } from "../database";
+import { getGuildConfig, isDatabaseReady } from "../database";
 import { warningEmbed, errorEmbed } from "../utils/embeds";
 
 const SCAM_PATTERNS = [
@@ -24,7 +24,7 @@ export async function handleSecurityScan(message: Message) {
     let gConf = null;
     if (isDatabaseReady()) {
         try {
-            gConf = await GuildConfig.findOne({ guildId: message.guild.id });
+            gConf = await getGuildConfig(message.guild.id);
         } catch (error) {
             console.error("Security config lookup failed:", error);
         }

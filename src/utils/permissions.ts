@@ -1,10 +1,10 @@
 import { GuildMember, PermissionsBitField, Role } from "discord.js";
-import { GuildConfig } from "../database";
+import { getGuildConfig } from "../database";
 
 export async function isStaff(member: GuildMember): Promise<boolean> {
     if (member.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
 
-    const gConf = await GuildConfig.findOne({ guildId: member.guild.id });
+    const gConf = await getGuildConfig(member.guild.id);
     if (!gConf || !gConf.roleIds) return false;
 
     const staffRoles = [
@@ -22,7 +22,7 @@ export async function isStaff(member: GuildMember): Promise<boolean> {
 export async function isAdmin(member: GuildMember): Promise<boolean> {
     if (member.permissions.has(PermissionsBitField.Flags.Administrator)) return true;
 
-    const gConf = await GuildConfig.findOne({ guildId: member.guild.id });
+    const gConf = await getGuildConfig(member.guild.id);
     if (!gConf || !gConf.roleIds || !gConf.roleIds.adminRoleId) return false;
 
     return member.roles.cache.has(gConf.roleIds.adminRoleId);

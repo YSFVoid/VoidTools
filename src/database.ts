@@ -64,6 +64,42 @@ export function isDatabaseReady() {
     return mongoose.connection.readyState === 1;
 }
 
+export async function getGuildConfig(guildId: string) {
+    if (!guildId) {
+        return null;
+    }
+
+    return GuildConfig.findOne({ guildId }).sort({ _id: -1 });
+}
+
+export async function getOrCreateGuildConfig(guildId: string) {
+    if (!guildId) {
+        throw new Error("guildId is required.");
+    }
+
+    try {
+        return await GuildConfig.findOneAndUpdate(
+            { guildId },
+            { $setOnInsert: { guildId } },
+            {
+                new: true,
+                upsert: true,
+                setDefaultsOnInsert: true,
+                sort: { _id: -1 },
+            }
+        );
+    } catch (error: any) {
+        if (error?.code === 11000) {
+            const existing = await getGuildConfig(guildId);
+            if (existing) {
+                return existing;
+            }
+        }
+
+        throw error;
+    }
+}
+
 export async function connectDatabase(retries = 5, delayMs = 5000): Promise<boolean> {
     if (isDatabaseReady()) return true;
     if (activeConnectionAttempt) return activeConnectionAttempt;
@@ -86,6 +122,7 @@ export async function connectDatabase(retries = 5, delayMs = 5000): Promise<bool
                 });
 
                 await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 5000 });
+                await ensureGuildConfigIndexes();
                 console.log("Connected to MongoDB via Mongoose");
                 return true;
             } catch (error: any) {
@@ -164,6 +201,9 @@ const guildConfigSchema = new mongoose.Schema({
     },
     youtube: {
         channelInput: String,
+        originalInput: String,
+        channelId: String,
+        feedUrl: String,
         notifyChannelId: String,
         lastVideoId: String,
         lastVideoPublishedAt: Date,
@@ -189,6 +229,16 @@ const guildConfigSchema = new mongoose.Schema({
 });
 
 export const GuildConfig = mongoose.model("GuildConfig", guildConfigSchema);
+
+async function ensureGuildConfigIndexes() {
+    await GuildConfig.collection.createIndex(
+        { guildId: 1 },
+        {
+            unique: true,
+            name: "guildId_1",
+        }
+    );
+}
 
 const ticketSchema = new mongoose.Schema({
     guildId: { type: String, required: true },

@@ -1,7 +1,7 @@
 import { Message, EmbedBuilder } from "discord.js";
 import { config } from "../config";
 import { primaryEmbed, infoEmbed, successEmbed, errorEmbed } from "../utils/embeds";
-import { GuildConfig, Tool, isDatabaseReady } from "../database";
+import { Tool, getGuildConfig, isDatabaseReady } from "../database";
 import { escapeRegExp } from "../utils/regex";
 import { ensureYouTubeNotificationRole } from "./youtube";
 
@@ -86,7 +86,7 @@ export async function handlePrefixCommand(message: Message) {
             }
 
             const mode = args[0]?.toLowerCase();
-            const gConf = await GuildConfig.findOne({ guildId: message.guild.id });
+            const gConf = await getGuildConfig(message.guild.id);
             const role = await ensureYouTubeNotificationRole(message.guild, gConf || undefined).catch(() => null);
             if (!role) {
                 return message.reply({ embeds: [errorEmbed("Config Error", "I could not create or repair the YouTube opt-in role.")] });
