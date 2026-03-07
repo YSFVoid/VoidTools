@@ -1,7 +1,8 @@
+import type { Server } from "node:http";
 import express, { Request } from "express";
 import { Client } from "discord.js";
 import { config } from "./config";
-import { getRuntimeSnapshot } from "./runtime";
+import { getRuntimeSnapshot, setDashboardBinding } from "./runtime";
 
 type DashboardActionName = "retry-db" | "sync-commands" | "poll-youtube" | "poll-releases";
 type DashboardAction = () => Promise<string | void>;
@@ -10,6 +11,8 @@ const app = express();
 let dashboardStarted = false;
 let dashboardClient: Client | null = null;
 const dashboardActions = new Map<DashboardActionName, DashboardAction>();
+const dashboardPortWasConfigured = Boolean(process.env.PORT?.trim());
+const dashboardPortFallbackAttempts = 10;
 
 app.disable("x-powered-by");
 app.use(express.json());
@@ -531,6 +534,99 @@ function renderDashboard() {
 </html>`;
 }
 
+function getDashboardPortCandidates() {
+    if (dashboardPortWasConfigured) {
+        return [config.port];
+    }
+
+    const candidates = new Set<number>([config.port]);
+    for (let index = 1; index <= dashboardPortFallbackAttempts; index += 1) {
+        candidates.add(config.port + index);
+    }
+
+    return [...candidates.values()];
+}
+
+function getDashboardUrl(host: string, port: number) {
+    return `http://${host}:${port}`;
+}
+
+function logDashboardStartError(error: NodeJS.ErrnoException, port: number) {
+    if (error.code === "EADDRINUSE") {
+        console.warn(`Web dashboard port ${port} is already in use. Dashboard startup skipped.`);
+        return;
+    }
+
+    console.error(`Web dashboard failed to start on ${config.host}:${port}: ${error.message}`);
+}
+
+function listenOnDashboardPort(port: number) {
+    return new Promise<Server>((resolve, reject) => {
+        const server = app.listen(port, config.host);
+
+        const handleListening = () => {
+            server.off("error", handleError);
+            resolve(server);
+        };
+
+        const handleError = (error: NodeJS.ErrnoException) => {
+            server.off("listening", handleListening);
+            reject(error);
+        };
+
+        server.once("listening", handleListening);
+        server.once("error", handleError);
+    });
+}
+
+async function bindDashboardServer() {
+    let lastError: NodeJS.ErrnoException | null = null;
+
+    for (const port of getDashboardPortCandidates()) {
+        try {
+            const server = await listenOnDashboardPort(port);
+            const usingFallbackPort = port !== config.port;
+            setDashboardBinding(config.host, port);
+
+            if (usingFallbackPort) {
+                console.warn(
+                    `Web dashboard port ${config.port} is already in use. Falling back to ${getDashboardUrl(config.host, port)}.`
+                );
+            }
+
+            console.log(`Web dashboard listening on ${getDashboardUrl(config.host, port)}`);
+            if (process.env.REPLIT_DEPLOYMENT && !config.dashboardToken) {
+                console.warn("Dashboard token is not configured. Public dashboard actions will stay disabled on deployment.");
+            }
+
+            server.on("error", (error) => {
+                logDashboardStartError(error as NodeJS.ErrnoException, port);
+            });
+            return;
+        } catch (error) {
+            const startError = error as NodeJS.ErrnoException;
+            lastError = startError;
+
+            if (startError.code === "EADDRINUSE" && !dashboardPortWasConfigured) {
+                continue;
+            }
+
+            logDashboardStartError(startError, port);
+            return;
+        }
+    }
+
+    if (lastError) {
+        if (lastError.code === "EADDRINUSE") {
+            const attemptedPorts = getDashboardPortCandidates().join(", ");
+            console.warn(`Web dashboard could not start because all candidate ports are in use: ${attemptedPorts}.`);
+            return;
+        }
+
+        logDashboardStartError(lastError, config.port);
+    }
+}
+
 app.get("/", (_request, response) => {
     response.type("html").send(renderDashboard());
 });
@@ -600,15 +696,5 @@ export function startDashboard(
 
     if (dashboardStarted) return;
     dashboardStarted = true;
-
-    const server = app.listen(config.port, config.host, () => {
-        console.log(`Web dashboard listening on http://${config.host}:${config.port}`);
-        if (process.env.REPLIT_DEPLOYMENT && !config.dashboardToken) {
-            console.warn("Dashboard token is not configured. Public dashboard actions will stay disabled on deployment.");
-        }
-    });
-
-    server.on("error", (error) => {
-        console.error("Web dashboard failed to start:", error);
-    });
+    void bindDashboardServer();
 }

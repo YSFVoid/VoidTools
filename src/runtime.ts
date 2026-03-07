@@ -17,6 +17,10 @@ interface JobState extends RuntimeSection {
 }
 
 const startedAt = new Date().toISOString();
+const dashboardBinding = {
+    host: config.host,
+    port: config.port,
+};
 
 const runtimeState = {
     bot: {
@@ -118,12 +122,17 @@ export function markJobOffline(jobName: JobName, error: string) {
     });
 }
 
+export function setDashboardBinding(host: string, port: number) {
+    dashboardBinding.host = host;
+    dashboardBinding.port = port;
+}
+
 export function getRuntimeSnapshot(client?: Client) {
     return {
         startedAt,
         environment: {
-            port: config.port,
-            host: config.host,
+            port: dashboardBinding.port,
+            host: dashboardBinding.host,
             guildId: config.guildId || null,
             dnsServers: config.dnsServers.length ? config.dnsServers : null,
             replit: Boolean(process.env.REPL_ID),
