@@ -7,6 +7,7 @@ import {
     Client,
     EmbedBuilder,
     Guild,
+    MessageFlags,
     SlashCommandBuilder,
 } from "discord.js";
 import { config } from "../config";
@@ -305,19 +306,19 @@ async function seedWatchState(watch: any, repository: GitHubRepositoryResponse) 
 
 export async function handleGitHubWatchAdmin(interaction: ChatInputCommandInteraction) {
     if (!(await isStaff(interaction.member as any)) && interaction.user.id !== interaction.guild?.ownerId) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], flags: MessageFlags.Ephemeral });
     }
 
     const subcommand = interaction.options.getSubcommand();
     const guildId = interaction.guildId;
     if (!guildId) {
-        return interaction.reply({ embeds: [errorEmbed("Guild Only", "This command only works in a server.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Guild Only", "This command only works in a server.")], flags: MessageFlags.Ephemeral });
     }
 
     if (subcommand === "list") {
         const watches = await ReleaseFeed.find({ guildId });
         if (watches.length === 0) {
-            return interaction.reply({ embeds: [primaryEmbed("GitHub Watchers", "No repositories are being watched yet.")], ephemeral: true });
+            return interaction.reply({ embeds: [primaryEmbed("GitHub Watchers", "No repositories are being watched yet.")], flags: MessageFlags.Ephemeral });
         }
 
         const lines = watches.map((watch) => {
@@ -328,25 +329,25 @@ export async function handleGitHubWatchAdmin(interaction: ChatInputCommandIntera
             }`;
         });
 
-        return interaction.reply({ embeds: [primaryEmbed("GitHub Watchers", lines.join("\n"))], ephemeral: true });
+        return interaction.reply({ embeds: [primaryEmbed("GitHub Watchers", lines.join("\n"))], flags: MessageFlags.Ephemeral });
     }
 
     const repoInput = interaction.options.getString("repo_url", true);
     const parsedRepo = parseGitHubRepoInput(repoInput);
     if (!parsedRepo) {
-        return interaction.reply({ embeds: [errorEmbed("Invalid Repository", "Use a valid public GitHub repository URL.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Invalid Repository", "Use a valid public GitHub repository URL.")], flags: MessageFlags.Ephemeral });
     }
 
     if (subcommand === "remove") {
         const existingWatch = await findGitHubWatchDocument(guildId, parsedRepo);
         if (!existingWatch) {
-            return interaction.reply({ embeds: [errorEmbed("Not Found", "No watcher exists for that repository.")], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed("Not Found", "No watcher exists for that repository.")], flags: MessageFlags.Ephemeral });
         }
 
         await existingWatch.deleteOne();
         return interaction.reply({
             embeds: [successEmbed("Watcher Removed", `Stopped watching **${parsedRepo.fullName}**.`)],
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
         });
     }
 
@@ -355,22 +356,22 @@ export async function handleGitHubWatchAdmin(interaction: ChatInputCommandIntera
         if (!repository) {
             return interaction.reply({
                 embeds: [errorEmbed("Repository Not Found", "GitHub did not return that public repository.")],
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
         }
 
         if (subcommand === "test") {
             const watch = await findGitHubWatchDocument(guildId, parsedRepo);
             if (!watch) {
-                return interaction.reply({ embeds: [errorEmbed("Not Found", "Create the watcher first with `/githubwatch add`.")], ephemeral: true });
+                return interaction.reply({ embeds: [errorEmbed("Not Found", "Create the watcher first with `/githubwatch add`.")], flags: MessageFlags.Ephemeral });
             }
 
             const guild = interaction.guild;
             if (!guild) {
-                return interaction.reply({ embeds: [errorEmbed("Guild Only", "This command only works in a server.")], ephemeral: true });
+                return interaction.reply({ embeds: [errorEmbed("Guild Only", "This command only works in a server.")], flags: MessageFlags.Ephemeral });
             }
 
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
             const branch = watch.defaultBranch || parsedRepo.branch || repository.default_branch;
             const guildConfig = await getGuildConfig(guildId);
@@ -418,7 +419,7 @@ export async function handleGitHubWatchAdmin(interaction: ChatInputCommandIntera
 
         const targetChannel = interaction.options.getChannel("target_channel", true);
         if (!isSupportedGitHubChannel(targetChannel)) {
-            return interaction.reply({ embeds: [errorEmbed("Invalid Channel", "Choose a server text or announcement channel.")], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed("Invalid Channel", "Choose a server text or announcement channel.")], flags: MessageFlags.Ephemeral });
         }
 
         const updates = interaction.options.getString("updates", true);
@@ -448,7 +449,7 @@ export async function handleGitHubWatchAdmin(interaction: ChatInputCommandIntera
                     `Repository: **${repository.full_name}**\nUpdates: **${getWatchLabel(watch)}**\nChannel: <#${targetChannel.id}>`
                 ),
             ],
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
         });
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -456,7 +457,7 @@ export async function handleGitHubWatchAdmin(interaction: ChatInputCommandIntera
             return interaction.editReply({ embeds: [errorEmbed("GitHub Watch Failed", message)] });
         }
 
-        return interaction.reply({ embeds: [errorEmbed("GitHub Watch Failed", message)], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("GitHub Watch Failed", message)], flags: MessageFlags.Ephemeral });
     }
 }
 

@@ -7,6 +7,7 @@ import {
     ChatInputCommandInteraction,
     ModalBuilder,
     ModalSubmitInteraction,
+    MessageFlags,
     OverwriteResolvable,
     PermissionFlagsBits,
     Role,
@@ -18,10 +19,13 @@ import {
 import { defaultCategories, defaultChannels, defaultRoles } from "../config";
 import { getGuildConfig, getOrCreateGuildConfig } from "../database";
 import { errorEmbed, infoEmbed, primaryEmbed, successEmbed } from "../utils/embeds";
-import { ensurePanelMessage } from "../utils/panels";
+import { ensurePanelMessage, PanelRef } from "../utils/panels";
 import { isAdmin } from "../utils/permissions";
 import { sendTicketPanel } from "./tickets";
 import { ensureYouTubeNotificationRole, getYouTubeErrorMessage, resolveYouTubeChannelInput } from "./youtube";
+
+type PanelRefKey = "setupWizard" | "verify" | "ticket";
+type PersistedPanelRefs = Partial<Record<PanelRefKey, PanelRef>>;
 
 function getPanelRef(ref: any) {
     if (!ref?.channelId || !ref?.messageId) {
@@ -32,6 +36,27 @@ function getPanelRef(ref: any) {
         channelId: ref.channelId,
         messageId: ref.messageId,
     };
+}
+
+function setPersistedPanelRef(target: PersistedPanelRefs, key: PanelRefKey, ref?: PanelRef | null) {
+    if (!ref?.channelId || !ref?.messageId) {
+        return;
+    }
+
+    target[key] = {
+        channelId: ref.channelId,
+        messageId: ref.messageId,
+    };
+}
+
+function sanitizePanelRefs(panelRefs: any): PersistedPanelRefs {
+    const nextPanelRefs: PersistedPanelRefs = {};
+
+    setPersistedPanelRef(nextPanelRefs, "setupWizard", getPanelRef(panelRefs?.setupWizard));
+    setPersistedPanelRef(nextPanelRefs, "verify", getPanelRef(panelRefs?.verify));
+    setPersistedPanelRef(nextPanelRefs, "ticket", getPanelRef(panelRefs?.ticket));
+
+    return nextPanelRefs;
 }
 
 export const setupCommand = new SlashCommandBuilder()
@@ -111,10 +136,13 @@ async function ensureChannel(
 
 export async function executeSetup(interaction: ChatInputCommandInteraction) {
     if (!(await isAdmin(interaction.member as any))) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Admin only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Admin only.")], flags: MessageFlags.Ephemeral });
     }
 
-    await interaction.reply({ embeds: [infoEmbed("Setup Working", "Creating/repairing server structure... Please wait.")], ephemeral: true });
+    await interaction.reply({
+        embeds: [infoEmbed("Setup Working", "Creating/repairing server structure... Please wait.")],
+        flags: MessageFlags.Ephemeral,
+    });
 
     const guild = interaction.guild!;
     const mode = interaction.options.getString("mode") || "normal";
@@ -184,6 +212,7 @@ export async function executeSetup(interaction: ChatInputCommandInteraction) {
     const chLogs = await ensureChannel(guild, defaultChannels.logs, "logs", catLogs.id, staffOverwrites);
 
     const gConf = await getOrCreateGuildConfig(guild.id);
+    const nextPanelRefs = sanitizePanelRefs(gConf.panelRefs);
 
     const youtubeRole = await ensureYouTubeNotificationRole(guild, gConf).catch(() => null);
 
@@ -243,16 +272,10 @@ export async function executeSetup(interaction: ChatInputCommandInteraction) {
                     ),
                 ],
             },
-            getPanelRef(gConf.panelRefs?.setupWizard)
+            nextPanelRefs.setupWizard || null
         );
 
-        gConf.panelRefs = {
-            ...(gConf.panelRefs || {}),
-            setupWizard: {
-                channelId: setupPanel.channelId,
-                messageId: setupPanel.messageId,
-            },
-        };
+        setPersistedPanelRef(nextPanelRefs, "setupWizard", setupPanel);
     }
 
     const verifyPanel = await ensurePanelMessage(
@@ -266,25 +289,19 @@ export async function executeSetup(interaction: ChatInputCommandInteraction) {
                 ),
             ],
         },
-        getPanelRef(gConf.panelRefs?.verify)
+        nextPanelRefs.verify || null
     );
 
-    gConf.panelRefs = {
-        ...(gConf.panelRefs || {}),
-        verify: {
-            channelId: verifyPanel.channelId,
-            messageId: verifyPanel.messageId,
-        },
-    };
+    setPersistedPanelRef(nextPanelRefs, "verify", verifyPanel);
 
-    const ticketPanel = await sendTicketPanel(chSupport, getPanelRef(gConf.panelRefs?.ticket));
-    gConf.panelRefs = {
-        ...(gConf.panelRefs || {}),
-        ticket: {
-            channelId: ticketPanel.channelId,
-            messageId: ticketPanel.messageId,
-        },
-    };
+    const ticketPanel = await sendTicketPanel(chSupport, nextPanelRefs.ticket || null);
+    setPersistedPanelRef(nextPanelRefs, "ticket", ticketPanel);
+
+    if (Object.keys(nextPanelRefs).length > 0) {
+        gConf.panelRefs = nextPanelRefs;
+    } else {
+        gConf.set("panelRefs", undefined);
+    }
 
     await gConf.save();
 
@@ -294,7 +311,7 @@ export async function executeSetup(interaction: ChatInputCommandInteraction) {
 
 export async function handleSetupWizardBtn(interaction: any) {
     if (!(await isAdmin(interaction.member as any))) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Admin only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Admin only.")], flags: MessageFlags.Ephemeral });
     }
 
     const modal = new ModalBuilder()
@@ -337,10 +354,10 @@ export async function handleSetupWizardBtn(interaction: any) {
 
 export async function handleSetupWizardSubmit(interaction: ModalSubmitInteraction) {
     if (!(await isAdmin(interaction.member as any))) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Admin only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Admin only.")], flags: MessageFlags.Ephemeral });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const github = interaction.fields.getTextInputValue("github").trim();
     const youtube = interaction.fields.getTextInputValue("youtube").trim();

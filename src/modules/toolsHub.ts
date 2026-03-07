@@ -5,6 +5,7 @@ import {
     ChannelType,
     ChatInputCommandInteraction,
     EmbedBuilder,
+    MessageFlags,
     SlashCommandBuilder,
 } from "discord.js";
 import { Tool } from "../database";
@@ -246,20 +247,20 @@ async function upsertToolRecord(draft: ToolDraft, actorId: string) {
 
 export async function handleToolsAdmin(interaction: ChatInputCommandInteraction) {
     if (!(await isStaff(interaction.member as any)) && interaction.user.id !== interaction.guild?.ownerId) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], flags: MessageFlags.Ephemeral });
     }
 
     if (interaction.commandName === "addtool") {
         const result = buildToolDraft(interaction, { requireLinks: false });
         if (result.error || !result.draft) {
-            return interaction.reply({ embeds: [errorEmbed("Invalid Input", result.error || "Invalid tool input.")], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed("Invalid Input", result.error || "Invalid tool input.")], flags: MessageFlags.Ephemeral });
         }
 
         const existingTool = await findToolByName(result.draft.name);
         if (existingTool) {
             return interaction.reply({
                 embeds: [errorEmbed("Exists", "A tool with this name already exists. Use `/edittool` or `/posttool`.")],
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
         }
 
@@ -272,7 +273,7 @@ export async function handleToolsAdmin(interaction: ChatInputCommandInteraction)
         const name = interaction.options.getString("name", true).trim();
         const deleted = await Tool.findOneAndDelete({ name: { $regex: new RegExp(`^${escapeRegExp(name)}$`, "i") } });
         if (!deleted) {
-            return interaction.reply({ embeds: [errorEmbed("Not Found", `Tool **${name}** was not found.`)], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed("Not Found", `Tool **${name}** was not found.`)], flags: MessageFlags.Ephemeral });
         }
 
         await interaction.reply({ embeds: [successEmbed("Deleted", `**${deleted.name}** was removed from the database.`)] });
@@ -282,7 +283,7 @@ export async function handleToolsAdmin(interaction: ChatInputCommandInteraction)
     if (interaction.commandName === "edittool") {
         const existingTool = await findToolByName(interaction.options.getString("name", true).trim());
         if (!existingTool) {
-            return interaction.reply({ embeds: [errorEmbed("Not Found", "Tool not found in the database.")], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed("Not Found", "Tool not found in the database.")], flags: MessageFlags.Ephemeral });
         }
 
         const updatedDescription = getOptionalString(interaction, "description");
@@ -300,7 +301,7 @@ export async function handleToolsAdmin(interaction: ChatInputCommandInteraction)
             updatedThumbnailUrl.error,
         ].find(Boolean);
         if (firstError) {
-            return interaction.reply({ embeds: [errorEmbed("Invalid Input", firstError)], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed("Invalid Input", firstError)], flags: MessageFlags.Ephemeral });
         }
 
         if (updatedDescription) existingTool.description = updatedDescription;
@@ -322,17 +323,17 @@ export async function handleToolsAdmin(interaction: ChatInputCommandInteraction)
     if (interaction.commandName === "posttool") {
         const result = buildToolDraft(interaction, { requireLinks: true });
         if (result.error || !result.draft) {
-            return interaction.reply({ embeds: [errorEmbed("Invalid Input", result.error || "Invalid tool input.")], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed("Invalid Input", result.error || "Invalid tool input.")], flags: MessageFlags.Ephemeral });
         }
 
         const targetChannel = interaction.options.getChannel("channel", true);
         if (!isSupportedPostChannel(targetChannel)) {
-            return interaction.reply({ embeds: [errorEmbed("Invalid Channel", "Choose a server text or announcement channel.")], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed("Invalid Channel", "Choose a server text or announcement channel.")], flags: MessageFlags.Ephemeral });
         }
 
         const storeInDatabase = interaction.options.getBoolean("store_in_database") ?? true;
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const embed = buildToolAnnouncementEmbed(result.draft);
         const components = buildToolButtons(result.draft);

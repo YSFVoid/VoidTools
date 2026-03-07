@@ -1,4 +1,4 @@
-import { ButtonInteraction, EmbedBuilder, GuildMember, TextChannel } from "discord.js";
+import { ButtonInteraction, EmbedBuilder, GuildMember, MessageFlags, TextChannel } from "discord.js";
 import { config } from "../config";
 import { getGuildConfig } from "../database";
 import { errorEmbed, infoEmbed, successEmbed } from "../utils/embeds";
@@ -6,20 +6,20 @@ import { errorEmbed, infoEmbed, successEmbed } from "../utils/embeds";
 export async function handleVerifyBtn(interaction: ButtonInteraction) {
     const gConf = interaction.guildId ? await getGuildConfig(interaction.guildId) : null;
     if (!gConf?.roleIds?.verifiedRoleId) {
-        return interaction.reply({ embeds: [errorEmbed("Config Error", "Run `/setup` first.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Config Error", "Run `/setup` first.")], flags: MessageFlags.Ephemeral });
     }
 
     const member = interaction.member as GuildMember;
     const verifiedRoleId = gConf.roleIds.verifiedRoleId;
     if (member.roles.cache.has(verifiedRoleId)) {
-        return interaction.reply({ embeds: [infoEmbed("Already Verified", "You are already verified.")], ephemeral: true });
+        return interaction.reply({ embeds: [infoEmbed("Already Verified", "You are already verified.")], flags: MessageFlags.Ephemeral });
     }
 
     try {
         await member.roles.add(verifiedRoleId, "Self-verification");
         await interaction.reply({
             embeds: [successEmbed("Verified", "You have been verified! Welcome to VoidTools.")],
-            ephemeral: true,
+            flags: MessageFlags.Ephemeral,
         });
 
         if (gConf.channelIds?.logsId) {
@@ -34,7 +34,7 @@ export async function handleVerifyBtn(interaction: ButtonInteraction) {
             }
         }
     } catch {
-        return interaction.reply({ embeds: [errorEmbed("Permission Error", "I cannot assign roles.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Permission Error", "I cannot assign roles.")], flags: MessageFlags.Ephemeral });
     }
 }
 

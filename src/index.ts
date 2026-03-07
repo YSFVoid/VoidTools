@@ -1,5 +1,5 @@
 import { REST } from "@discordjs/rest";
-import { Client, Events, GatewayIntentBits, Partials, Routes } from "discord.js";
+import { Client, Events, GatewayIntentBits, MessageFlags, Partials, Routes } from "discord.js";
 import { config } from "./config";
 import { connectDatabase, isDatabaseReady } from "./database";
 import {
@@ -132,7 +132,7 @@ async function replyDatabaseOffline(interaction: any) {
                 "MongoDB is unavailable. Fix `MONGODB_URI` or Atlas network access, then retry."
             ),
         ],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
     };
 
     if (interaction.deferred || interaction.replied) {
@@ -209,7 +209,7 @@ client.on("interactionCreate", async (interaction) => {
 
         if (interaction.isChatInputCommand()) {
             if (!interaction.inGuild()) {
-                await interaction.reply({ content: "This command can only be used inside a server.", ephemeral: true });
+                await interaction.reply({ content: "This command can only be used inside a server.", flags: MessageFlags.Ephemeral });
                 return;
             }
 
@@ -243,7 +243,7 @@ client.on("interactionCreate", async (interaction) => {
     } catch (error) {
         console.error("Interaction error:", error);
         if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-            await interaction.reply({ content: "An unexpected error occurred.", ephemeral: true }).catch(() => null);
+            await interaction.reply({ content: "An unexpected error occurred.", flags: MessageFlags.Ephemeral }).catch(() => null);
         }
     }
 });

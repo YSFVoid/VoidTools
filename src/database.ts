@@ -158,6 +158,23 @@ export async function connectDatabase(retries = 5, delayMs = 5000): Promise<bool
 }
 
 // Models
+const panelRefSchema = new mongoose.Schema(
+    {
+        channelId: String,
+        messageId: String,
+    },
+    { _id: false }
+);
+
+const panelRefsSchema = new mongoose.Schema(
+    {
+        setupWizard: { type: panelRefSchema, default: undefined },
+        verify: { type: panelRefSchema, default: undefined },
+        ticket: { type: panelRefSchema, default: undefined },
+    },
+    { _id: false }
+);
+
 const guildConfigSchema = new mongoose.Schema({
     guildId: { type: String, required: true, unique: true },
     prefix: { type: String, default: "!" },
@@ -208,20 +225,7 @@ const guildConfigSchema = new mongoose.Schema({
         lastVideoId: String,
         lastVideoPublishedAt: Date,
     },
-    panelRefs: {
-        setupWizard: {
-            channelId: String,
-            messageId: String,
-        },
-        verify: {
-            channelId: String,
-            messageId: String,
-        },
-        ticket: {
-            channelId: String,
-            messageId: String,
-        },
-    },
+    panelRefs: { type: panelRefsSchema, default: undefined },
     security: {
         whitelistedDomains: [String],
         quarantinedUsers: [String],

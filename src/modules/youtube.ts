@@ -5,6 +5,7 @@ import {
     EmbedBuilder,
     Guild,
     GuildMember,
+    MessageFlags,
     SlashCommandBuilder,
 } from "discord.js";
 import Parser from "rss-parser";
@@ -986,13 +987,13 @@ export function getYouTubeErrorMessage(error: unknown, fallback = "An unexpected
 
 export async function handleYouTubeConfig(interaction: ChatInputCommandInteraction) {
     if (!(await isStaff(interaction.member as any)) && interaction.user.id !== interaction.guild?.ownerId) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], flags: MessageFlags.Ephemeral });
     }
 
     const subcommand = interaction.options.getSubcommand();
     const guild = interaction.guild;
     if (!guild) {
-        return interaction.reply({ embeds: [errorEmbed("Guild Only", "This command only works in a server.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Guild Only", "This command only works in a server.")], flags: MessageFlags.Ephemeral });
     }
 
     const guildConfig = await getOrCreateGuildConfig(guild.id);
@@ -1001,10 +1002,10 @@ export async function handleYouTubeConfig(interaction: ChatInputCommandInteracti
         const rawInput = interaction.options.getString("channel_input", true);
         const targetChannel = interaction.options.getChannel("target_channel", true);
         if (!isSupportedNotificationChannel(targetChannel)) {
-            return interaction.reply({ embeds: [errorEmbed("Invalid Channel", "Choose a server text or announcement channel.")], ephemeral: true });
+            return interaction.reply({ embeds: [errorEmbed("Invalid Channel", "Choose a server text or announcement channel.")], flags: MessageFlags.Ephemeral });
         }
 
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         try {
             const resolvedInput = await resolveYouTubeChannelInput(rawInput, `command:set:${guild.id}`);
@@ -1051,7 +1052,7 @@ export async function handleYouTubeConfig(interaction: ChatInputCommandInteracti
     }
 
     if (subcommand === "view") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const stored = getStoredYouTubeState(guildConfig);
         let settings: StoredYouTubeConfig | null = null;
@@ -1120,7 +1121,7 @@ export async function handleYouTubeConfig(interaction: ChatInputCommandInteracti
         return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     let settings: StoredYouTubeConfig;
     try {

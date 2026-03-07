@@ -6,6 +6,7 @@ import {
     ButtonStyle,
     CategoryChannel,
     ChannelType,
+    MessageFlags,
     ModalBuilder,
     ModalSubmitInteraction,
     PermissionFlagsBits,
@@ -76,7 +77,7 @@ function getTextTicketChannel(channel: unknown) {
 }
 
 export async function handleTicketOpen(interaction: AnySelectMenuInteraction | ButtonInteraction) {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const guild = interaction.guild;
     const member = interaction.member as any;
@@ -197,7 +198,7 @@ export async function handleTicketOpen(interaction: AnySelectMenuInteraction | B
 
 export async function handleTicketCloseBtn(interaction: ButtonInteraction) {
     if (!(await isStaff(interaction.member as any))) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], flags: MessageFlags.Ephemeral });
     }
 
     const modal = new ModalBuilder()
@@ -219,7 +220,7 @@ export async function handleTicketCloseBtn(interaction: ButtonInteraction) {
 
 export async function handleTicketCloseSubmit(interaction: ModalSubmitInteraction) {
     if (!(await isStaff(interaction.member as any))) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], flags: MessageFlags.Ephemeral });
     }
 
     await interaction.deferReply();
@@ -278,10 +279,10 @@ export async function handleTicketCloseSubmit(interaction: ModalSubmitInteractio
 
 export async function handleTicketTranscriptBtn(interaction: ButtonInteraction) {
     if (!(await isStaff(interaction.member as any))) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], flags: MessageFlags.Ephemeral });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const channel = getTextTicketChannel(interaction.channel);
     if (!channel) {
         return interaction.editReply({ embeds: [errorEmbed("Invalid Channel", "This ticket action must be used inside a text ticket channel.")] });
@@ -297,7 +298,7 @@ export async function handleTicketTranscriptBtn(interaction: ButtonInteraction) 
 
 export async function handleTicketAddUserBtn(interaction: ButtonInteraction) {
     if (!(await isStaff(interaction.member as any))) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], flags: MessageFlags.Ephemeral });
     }
 
     const modal = new ModalBuilder()
@@ -315,10 +316,10 @@ export async function handleTicketAddUserBtn(interaction: ButtonInteraction) {
 
 export async function handleTicketAddUserSubmit(interaction: ModalSubmitInteraction) {
     if (!(await isStaff(interaction.member as any))) {
-        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], ephemeral: true });
+        return interaction.reply({ embeds: [errorEmbed("Denied", "Staff only.")], flags: MessageFlags.Ephemeral });
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
     const channel = getTextTicketChannel(interaction.channel);
     if (!channel) {
         return interaction.editReply({ embeds: [errorEmbed("Invalid Channel", "This ticket action must be used inside a text ticket channel.")] });
