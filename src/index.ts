@@ -13,6 +13,7 @@ import { toolsCommands, handleToolsAdmin } from "./modules/toolsHub";
 import { startYouTubePoller } from "./modules/youtube";
 import { releasesCommands, handleReleasesAdmin, startReleasesPoller } from "./modules/releases";
 import { modCommands, handleBan, handleKick, handlePurge } from "./modules/moderation";
+import { startDashboard } from "./server";
 
 export const client = new Client({
     intents: [
@@ -47,6 +48,9 @@ client.once("ready", async () => {
     } catch (error) {
         console.error("Failed to sync slash commands:", error);
     }
+
+    // Start Replit Keep-Alive Web Dashboard
+    startDashboard(client);
 });
 
 // MESSAGE EVENTS
