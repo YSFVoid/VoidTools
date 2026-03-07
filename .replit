@@ -1,1 +1,14 @@
-run = "npm install && npm start"
+language = "nodejs"
+modules = ["nodejs-20"]
+entrypoint = "src/index.ts"
+run = "npm run dev"
+
+[nix]
+channel = "stable-23_11"
+
+[gitHubImport]
+requiredFiles = [".replit", "replit.nix"]
+
+[deployment]
+build = "npm ci && npm run build"
+run = "npm start"

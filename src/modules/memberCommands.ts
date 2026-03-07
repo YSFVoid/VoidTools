@@ -1,13 +1,24 @@
 import { Message, EmbedBuilder } from "discord.js";
 import { config } from "../config";
 import { primaryEmbed, infoEmbed, successEmbed, errorEmbed } from "../utils/embeds";
-import { GuildConfig, Tool } from "../database";
+import { GuildConfig, Tool, isDatabaseReady } from "../database";
+import { escapeRegExp } from "../utils/regex";
+import { ensureYouTubeNotificationRole } from "./youtube";
 
 export async function handlePrefixCommand(message: Message) {
     if (!message.content.startsWith(config.prefix) || message.author.bot) return;
 
     const args = message.content.slice(config.prefix.length).trim().split(/ +/);
     const command = args.shift()?.toLowerCase();
+
+    if (!command) return;
+
+    if (!isDatabaseReady() && !["help", "ping"].includes(command)) {
+        await message.reply({
+            embeds: [errorEmbed("Database Offline", "MongoDB is unavailable right now. Fix the database connection, then retry.")],
+        });
+        return;
+    }
 
     switch (command) {
         case "help": {
@@ -48,13 +59,16 @@ export async function handlePrefixCommand(message: Message) {
             if (!args[0]) return message.reply({ embeds: [errorEmbed("Missing Argument", "Usage: `!tool <name>`")] });
             const toolName = args.join(" ").toLowerCase();
 
-            const tool = await Tool.findOne({ name: { $regex: new RegExp(`^${toolName}$`, "i") } });
+            const tool = await Tool.findOne({ name: { $regex: new RegExp(`^${escapeRegExp(toolName)}$`, "i") } });
             if (!tool) return message.reply({ embeds: [errorEmbed("Not Found", `Tool **${toolName}** not found.`)] });
 
             const em = infoEmbed(`🛠️ ${tool.name}`, tool.description || "No description.");
             if (tool.version) em.addFields({ name: "Version", value: tool.version, inline: true });
             if (tool.category) em.addFields({ name: "Category", value: tool.category, inline: true });
-            if (tool.url) em.addFields({ name: "Link", value: tool.url, inline: false });
+            if (tool.sourceUrl) em.addFields({ name: "Source Code", value: tool.sourceUrl, inline: false });
+            if (tool.downloadUrl) em.addFields({ name: "Download", value: tool.downloadUrl, inline: false });
+            else if (tool.url) em.addFields({ name: "Download", value: tool.url, inline: false });
+            if (tool.publishedChannelId) em.addFields({ name: "Published In", value: `<#${tool.publishedChannelId}>`, inline: true });
 
             let attachStr = "";
             if (tool.filename) attachStr += `📎 \`${tool.filename}\`\n`;
@@ -67,26 +81,33 @@ export async function handlePrefixCommand(message: Message) {
             break;
         }
         case "yt": {
-            const mode = args[0]?.toLowerCase();
-            const gConf = await GuildConfig.findOne({ guildId: message.guild?.id });
-            if (!gConf || !gConf.roleIds?.youtubeNotifsRoleId) {
-                return message.reply({ embeds: [errorEmbed("Config Error", "YouTube role not set up.")] });
+            if (!message.guild || !message.member) {
+                return message.reply({ embeds: [errorEmbed("Guild Only", "Use this command inside the server.")] });
             }
 
-            const roleId = gConf.roleIds.youtubeNotifsRoleId;
-            const role = message.guild?.roles.cache.get(roleId);
-            if (!role) return message.reply({ embeds: [errorEmbed("Error", "YouTube role deleted or missing.")] });
+            const mode = args[0]?.toLowerCase();
+            const gConf = await GuildConfig.findOne({ guildId: message.guild.id });
+            const role = await ensureYouTubeNotificationRole(message.guild, gConf || undefined).catch(() => null);
+            if (!role) {
+                return message.reply({ embeds: [errorEmbed("Config Error", "I could not create or repair the YouTube opt-in role.")] });
+            }
 
-            if (mode === "on") {
-                if (message.member?.roles.cache.has(roleId)) return message.reply({ embeds: [infoEmbed("Info", "Already opted-in.")] });
-                await message.member?.roles.add(role);
-                await message.reply({ embeds: [successEmbed("YouTube Notifications", "You will now receive DMs for new videos.")] });
-            } else if (mode === "off") {
-                if (!message.member?.roles.cache.has(roleId)) return message.reply({ embeds: [infoEmbed("Info", "Already opted-out.")] });
-                await message.member?.roles.remove(role);
-                await message.reply({ embeds: [successEmbed("YouTube Notifications", "Opted-out. You will no longer receive DMs.")] });
-            } else {
-                await message.reply({ embeds: [infoEmbed("YouTube Auto-DMs", "Usage: `!yt on` to subscribe, `!yt off` to unsubscribe.")] });
+            const roleId = role.id;
+
+            try {
+                if (mode === "on") {
+                    if (message.member.roles.cache.has(roleId)) return message.reply({ embeds: [infoEmbed("Info", "Already opted-in.")] });
+                    await message.member.roles.add(role);
+                    await message.reply({ embeds: [successEmbed("YouTube Notifications", "You will now receive DMs for new videos.")] });
+                } else if (mode === "off") {
+                    if (!message.member.roles.cache.has(roleId)) return message.reply({ embeds: [infoEmbed("Info", "Already opted-out.")] });
+                    await message.member.roles.remove(role);
+                    await message.reply({ embeds: [successEmbed("YouTube Notifications", "Opted-out. You will no longer receive DMs.")] });
+                } else {
+                    await message.reply({ embeds: [infoEmbed("YouTube Auto-DMs", "Usage: `!yt on` to subscribe, `!yt off` to unsubscribe.")] });
+                }
+            } catch {
+                await message.reply({ embeds: [errorEmbed("Permission Error", "I could not update your YouTube notification role.")] });
             }
             break;
         }

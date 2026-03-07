@@ -1,11 +1,52 @@
+import dns from "node:dns";
 import dotenv from "dotenv";
 dotenv.config();
 
+function readEnv(name: string) {
+    return process.env[name]?.trim() || "";
+}
+
+function parsePort(value: string) {
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+        return 3000;
+    }
+
+    return parsed;
+}
+
+function configureDnsServers() {
+    const dnsServers = readEnv("DNS_SERVERS")
+        .split(",")
+        .map((server) => server.trim())
+        .filter(Boolean);
+
+    if (dnsServers.length === 0) {
+        return dnsServers;
+    }
+
+    try {
+        dns.setServers(dnsServers);
+    } catch (error) {
+        console.error("Failed to apply DNS_SERVERS override:", error);
+        return [];
+    }
+
+    return dnsServers;
+}
+
+const configuredDnsServers = configureDnsServers();
+
 export const config = {
-    token: process.env.DISCORD_TOKEN || "",
-    guildId: process.env.GUILD_ID || "",
-    mongoUri: process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/voidtools",
-    prefix: process.env.BOT_PREFIX || "!",
+    token: readEnv("DISCORD_TOKEN"),
+    guildId: readEnv("GUILD_ID"),
+    mongoUri: readEnv("MONGODB_URI") || "mongodb://127.0.0.1:27017/voidtools",
+    prefix: readEnv("BOT_PREFIX") || "!",
+    port: parsePort(readEnv("PORT") || "3000"),
+    host: readEnv("HOST") || "0.0.0.0",
+    dashboardToken: readEnv("DASHBOARD_TOKEN"),
+    githubToken: readEnv("GITHUB_TOKEN"),
+    dnsServers: configuredDnsServers,
     colors: {
         primary: 0x7b2fbe,
         success: 0x2ecc71,

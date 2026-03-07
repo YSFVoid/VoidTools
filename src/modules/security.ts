@@ -1,6 +1,6 @@
 import { Message, EmbedBuilder, TextChannel } from "discord.js";
 import { config } from "../config";
-import { GuildConfig } from "../database";
+import { GuildConfig, isDatabaseReady } from "../database";
 import { warningEmbed, errorEmbed } from "../utils/embeds";
 
 const SCAM_PATTERNS = [
@@ -21,7 +21,15 @@ export async function handleSecurityScan(message: Message) {
 
     const content = message.content.toLowerCase();
 
-    const gConf = await GuildConfig.findOne({ guildId: message.guild.id });
+    let gConf = null;
+    if (isDatabaseReady()) {
+        try {
+            gConf = await GuildConfig.findOne({ guildId: message.guild.id });
+        } catch (error) {
+            console.error("Security config lookup failed:", error);
+        }
+    }
+
     const whitelist = gConf?.security?.whitelistedDomains || [];
 
     let flaggedPattern: string | null = null;
