@@ -331,6 +331,14 @@ interface StoredYouTubeConfig {
 interface YouTubeChannelsListResponse {
     items?: Array<{
         id?: string;
+        snippet?: {
+            title?: string;
+        };
+        contentDetails?: {
+            relatedPlaylists?: {
+                uploads?: string;
+            };
+        };
     }>;
     error?: {
         code?: number;
@@ -342,17 +350,51 @@ interface YouTubeChannelsListResponse {
     };
 }
 
-async function resolveHandleToChannelId(handle: string, context: string) {
+interface YouTubePlaylistItemsResponse {
+    items?: Array<{
+        snippet?: {
+            title?: string;
+            channelTitle?: string;
+            publishedAt?: string;
+            resourceId?: {
+                videoId?: string;
+            };
+        };
+        contentDetails?: {
+            videoId?: string;
+            videoPublishedAt?: string;
+        };
+        status?: {
+            privacyStatus?: string;
+        };
+    }>;
+    error?: {
+        code?: number;
+        message?: string;
+        errors?: Array<{
+            reason?: string;
+            message?: string;
+        }>;
+    };
+}
+
+interface YouTubeRssFetchResult {
+    entryCount: number;
+    latestVideo: LatestYouTubeVideo | null;
+}
+
+async function fetchYouTubeApiJson<T>(path: string, params: Record<string, string>, context: string): Promise<T> {
     if (!config.youtubeApiKey) {
         throw new YouTubeConfigError(
             "missing_api_key",
-            "YOUTUBE_API_KEY is not configured. Handle-based YouTube inputs require the YouTube Data API."
+            "YOUTUBE_API_KEY is not configured. YouTube Data API requests cannot be used right now."
         );
     }
 
-    const apiUrl = new URL("https://www.googleapis.com/youtube/v3/channels");
-    apiUrl.searchParams.set("part", "id");
-    apiUrl.searchParams.set("forHandle", handle);
+    const apiUrl = new URL(`https://www.googleapis.com/youtube/v3/${path}`);
+    for (const [key, value] of Object.entries(params)) {
+        apiUrl.searchParams.set(key, value);
+    }
     apiUrl.searchParams.set("key", config.youtubeApiKey);
 
     let response: Response;
@@ -369,14 +411,14 @@ async function resolveHandleToChannelId(handle: string, context: string) {
 
     logYouTubeDebug("YouTube Data API response received", {
         context,
-        handle,
+        endpoint: path,
         status: response.status,
         statusText: response.statusText,
     });
 
-    let responseBody: YouTubeChannelsListResponse = {};
+    let responseBody: any = {};
     try {
-        responseBody = (await response.json()) as YouTubeChannelsListResponse;
+        responseBody = await response.json();
     } catch (error) {
         if (!response.ok) {
             throw new YouTubeConfigError(
@@ -388,9 +430,9 @@ async function resolveHandleToChannelId(handle: string, context: string) {
         }
     }
 
-    const apiReasons = responseBody.error?.errors?.map((entry) => entry.reason || "").filter(Boolean) || [];
+    const apiReasons = responseBody.error?.errors?.map((entry: { reason?: string }) => entry.reason || "").filter(Boolean) || [];
     const apiMessage = responseBody.error?.message || apiReasons[0] || "Unknown YouTube API error.";
-    if (apiReasons.some((reason) => ["quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded"].includes(reason))) {
+    if (apiReasons.some((reason: string) => ["quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded"].includes(reason))) {
         throw new YouTubeConfigError(
             "quota_exceeded",
             "The YouTube Data API quota is exceeded right now. Try again later or increase the API quota.",
@@ -405,6 +447,19 @@ async function resolveHandleToChannelId(handle: string, context: string) {
             response.status
         );
     }
+
+    return responseBody as T;
+}
+
+async function resolveHandleToChannelId(handle: string, context: string) {
+    const responseBody = await fetchYouTubeApiJson<YouTubeChannelsListResponse>(
+        "channels",
+        {
+            part: "id",
+            forHandle: handle,
+        },
+        `${context}:resolve-handle:${handle}`
+    );
 
     const channelId = responseBody.items?.find((item) => item.id && CHANNEL_ID_PATTERN.test(item.id))?.id || null;
     if (!channelId) {
@@ -683,6 +738,15 @@ interface LatestYouTubeVideo {
     link: string;
     videoId: string | null;
     publishedAt: Date;
+    source: "rss" | "api_fallback";
+}
+
+interface LatestYouTubeVideoResolution {
+    video: LatestYouTubeVideo;
+    rssReturnedEntries: boolean;
+    rssEntryCount: number;
+    apiFallbackAttempted: boolean;
+    apiFallbackFoundVideo: boolean;
 }
 
 function isSupportedNotificationChannel(channel: unknown): channel is { id: string; send: (...args: any[]) => Promise<any> } {
@@ -697,7 +761,7 @@ function isSupportedNotificationChannel(channel: unknown): channel is { id: stri
     );
 }
 
-async function fetchLatestYouTubeVideo(feedUrl: string, context: string): Promise<LatestYouTubeVideo> {
+async function fetchLatestYouTubeVideoFromRss(feedUrl: string, context: string): Promise<YouTubeRssFetchResult> {
     logYouTubeDebug("Fetching YouTube RSS feed", {
         context,
         feedUrl,
@@ -726,11 +790,14 @@ async function fetchLatestYouTubeVideo(feedUrl: string, context: string): Promis
     }
 
     if (!feed.items?.length) {
-        logYouTubeError("YouTube RSS feed returned no entries", {
+        logYouTubeDebug("YouTube RSS feed returned no entries; API fallback may be required", {
             context,
             feedUrl,
         });
-        throw new YouTubeConfigError("feed_empty", "The configured YouTube feed has no video entries.");
+        return {
+            entryCount: 0,
+            latestVideo: null,
+        };
     }
 
     const latestVideo = feed.items[0];
@@ -739,12 +806,118 @@ async function fetchLatestYouTubeVideo(feedUrl: string, context: string): Promis
     const publishedAt = latestVideo.pubDate ? new Date(latestVideo.pubDate) : new Date();
 
     return {
-        channelTitle: feed.title || "YouTube",
-        title: latestVideo.title || "New Video",
+        entryCount: feed.items.length,
+        latestVideo: {
+            channelTitle: feed.title || "YouTube",
+            title: latestVideo.title || "New Video",
+            link,
+            videoId,
+            publishedAt: Number.isNaN(publishedAt.getTime()) ? new Date() : publishedAt,
+            source: "rss",
+        },
+    };
+}
+
+async function fetchLatestYouTubeVideoFromApi(channelId: string, context: string): Promise<LatestYouTubeVideo | null> {
+    logYouTubeDebug("Falling back to YouTube Data API for latest uploaded video", {
+        context,
+        channelId,
+    });
+
+    const channelsResponse = await fetchYouTubeApiJson<YouTubeChannelsListResponse>(
+        "channels",
+        {
+            part: "snippet,contentDetails",
+            id: channelId,
+        },
+        `${context}:channel-details:${channelId}`
+    );
+    const channel = channelsResponse.items?.find((item) => item.id === channelId) || channelsResponse.items?.[0];
+    if (!channel?.id) {
+        throw new YouTubeConfigError("channel_not_found", "The resolved YouTube channel was not found in the YouTube Data API.");
+    }
+
+    const uploadsPlaylistId = channel.contentDetails?.relatedPlaylists?.uploads || "";
+    if (!uploadsPlaylistId) {
+        logYouTubeError("YouTube Data API did not return an uploads playlist", {
+            context,
+            channelId,
+        });
+        return null;
+    }
+
+    const playlistResponse = await fetchYouTubeApiJson<YouTubePlaylistItemsResponse>(
+        "playlistItems",
+        {
+            part: "snippet,contentDetails,status",
+            playlistId: uploadsPlaylistId,
+            maxResults: "1",
+        },
+        `${context}:uploads-playlist:${uploadsPlaylistId}`
+    );
+    const latestItem = playlistResponse.items?.[0];
+    if (!latestItem) {
+        logYouTubeError("YouTube Data API uploads playlist returned no items", {
+            context,
+            channelId,
+            uploadsPlaylistId,
+        });
+        return null;
+    }
+
+    const videoId =
+        latestItem.contentDetails?.videoId ||
+        latestItem.snippet?.resourceId?.videoId ||
+        null;
+    const link = videoId ? `https://www.youtube.com/watch?v=${videoId}` : "";
+    const publishedAtRaw = latestItem.contentDetails?.videoPublishedAt || latestItem.snippet?.publishedAt || null;
+    const publishedAt = publishedAtRaw ? new Date(publishedAtRaw) : new Date();
+
+    logYouTubeDebug("YouTube Data API fallback found latest uploaded video", {
+        context,
+        channelId,
+        uploadsPlaylistId,
+        videoId,
+        privacyStatus: latestItem.status?.privacyStatus || null,
+    });
+
+    return {
+        channelTitle: latestItem.snippet?.channelTitle || channel.snippet?.title || "YouTube",
+        title: latestItem.snippet?.title || "New Video",
         link,
         videoId,
         publishedAt: Number.isNaN(publishedAt.getTime()) ? new Date() : publishedAt,
+        source: "api_fallback",
     };
+}
+
+async function fetchLatestYouTubeVideo(channelId: string, feedUrl: string, context: string): Promise<LatestYouTubeVideoResolution> {
+    const rssResult = await fetchLatestYouTubeVideoFromRss(feedUrl, context);
+    if (rssResult.latestVideo) {
+        return {
+            video: rssResult.latestVideo,
+            rssReturnedEntries: true,
+            rssEntryCount: rssResult.entryCount,
+            apiFallbackAttempted: false,
+            apiFallbackFoundVideo: false,
+        };
+    }
+
+    const apiFallbackVideo = await fetchLatestYouTubeVideoFromApi(channelId, context);
+    if (apiFallbackVideo) {
+        return {
+            video: apiFallbackVideo,
+            rssReturnedEntries: false,
+            rssEntryCount: rssResult.entryCount,
+            apiFallbackAttempted: true,
+            apiFallbackFoundVideo: true,
+        };
+    }
+
+    throw new YouTubeConfigError(
+        "feed_empty",
+        "The configured YouTube RSS feed has no video entries, and the YouTube Data API did not return any uploads."
+    );
 }
 
 function buildYouTubeEmbed(video: LatestYouTubeVideo) {
@@ -785,6 +958,10 @@ async function sendVideoToConfiguredChannel(guild: Guild, channelId: string, emb
 
 function formatStoredValue(value: string) {
     return value ? `\`${value}\`` : "Not configured";
+}
+
+function formatStatusLabel(value: boolean, truthyLabel = "Yes", falsyLabel = "No") {
+    return value ? truthyLabel : falsyLabel;
 }
 
 function formatOptionalTimestamp(value: Date | null) {
@@ -966,8 +1143,8 @@ export async function handleYouTubeConfig(interaction: ChatInputCommandInteracti
     }
 
     try {
-        const latestVideo = await fetchLatestYouTubeVideo(settings.feedUrl, `command:test:${guild.id}`);
-        const embed = buildYouTubeEmbed(latestVideo);
+        const latestVideoResult = await fetchLatestYouTubeVideo(settings.channelId, settings.feedUrl, `command:test:${guild.id}`);
+        const embed = buildYouTubeEmbed(latestVideoResult.video);
         await sendVideoToConfiguredChannel(guild, settings.notifyChannelId, embed);
         const member = interaction.member as GuildMember;
         queueDM(member, embed);
@@ -976,7 +1153,17 @@ export async function handleYouTubeConfig(interaction: ChatInputCommandInteracti
             embeds: [
                 successEmbed(
                     "Test Sent",
-                    `Posted the latest YouTube video from ${formatStoredValue(settings.channelId)} to <#${settings.notifyChannelId}> and queued a DM to you.`
+                    `Posted the latest YouTube video from ${formatStoredValue(settings.channelId)} to <#${settings.notifyChannelId}> and queued a DM to you.\nResolved Channel ID: ${formatStoredValue(
+                        settings.channelId
+                    )}\nFeed URL Used: ${formatStoredValue(settings.feedUrl)}\nRSS Returned Entries: ${formatStatusLabel(
+                        latestVideoResult.rssReturnedEntries
+                    )}${latestVideoResult.rssReturnedEntries ? ` (${latestVideoResult.rssEntryCount})` : " (0)"}\nAPI Fallback Found Latest Video: ${
+                        latestVideoResult.apiFallbackAttempted
+                            ? formatStatusLabel(latestVideoResult.apiFallbackFoundVideo)
+                            : "Not needed"
+                    }\nLatest Video Source: ${
+                        latestVideoResult.video.source === "rss" ? "RSS" : "YouTube Data API fallback"
+                    }`
                 ),
             ],
         });
@@ -1021,7 +1208,12 @@ async function runYouTubePoll(client: Client) {
                 const settings = await resolveStoredYouTubeConfig(guildConfig, `poll:${guildConfig.guildId}`, true);
                 if (!settings.channelId || !settings.feedUrl || !settings.notifyChannelId) continue;
 
-                const latestVideo = await fetchLatestYouTubeVideo(settings.feedUrl, `poll:${guildConfig.guildId}`);
+                const latestVideoResult = await fetchLatestYouTubeVideo(
+                    settings.channelId,
+                    settings.feedUrl,
+                    `poll:${guildConfig.guildId}`
+                );
+                const latestVideo = latestVideoResult.video;
 
                 const videoKey = getVideoStateKey(latestVideo);
                 if (!videoKey) continue;
